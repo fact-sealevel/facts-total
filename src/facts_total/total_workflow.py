@@ -1,164 +1,170 @@
-from typing import List
-import xarray as xr
 import numpy as np
-import click
+import os
+import re
+import time
+import argparse
+import shutil
+import yaml
+import xarray as xr
+import dask.array as da
 
 
-class WorkflowTotaler:
-    """
-    Handles totaling of sealevel projections from modules included in a workflow.
+def TotalSamplesInDirectory(directory, pyear_start, pyear_end, pyear_step, chunksize):
 
-    Attributes
-    ----------
-    name : str
-        Name of the workflow.
-    paths_list : list of str
-        List of file paths to component-level projection datasets.
-    projections_ds : xr.Dataset, optional
-        Combined projections dataset, set after calling get_projections().
-    totaled_ds : xr.Dataset, optional
-        Totaled projections dataset, set after calling total_projections().
-    """
+	# Output directory
+	outdir = os.path.dirname(__file__)
 
-    def __init__(
-        self,
-        name: str,
-        paths_list: List[str],
-    ):
-        """
-        Initialize WorkflowTotaler.
+	# Define the output file
+	outfilename = "total.workflow.nc"
+	outfile = os.path.join(outdir, outfilename)
 
-        Parameters
-        ----------
-        name : str
-            Name of the workflow.
-        paths_list : list of str
-            List of file paths to component-level projection datasets.
-        """
-        self.name = name
-        self.paths_list = paths_list
+	# Get the list of input files
+	infiles0 = [file for file in os.listdir(directory) if file.endswith(".nc")]
+	
+	# Append the input directory to the input file name
+	infiles = []
+	for infile in infiles0:
+		infiles.append(os.path.join(directory, infile))
 
-    def get_projections(self) -> xr.Dataset:
-        """
-        Reads in component-level projection datasets from NetCDF files and combines them
-        along a 'file' dimension that is added to each dataset.
+	# Define the years of interest
+	targyears = xr.DataArray(np.arange(pyear_start, pyear_end+1, pyear_step), dims="years")
 
-        Returns
-        -------
-        xr.Dataset
-            Combined projections dataset with a new 'file' dimension.
+	r=TotalSamples(infiles, outfile, targyears, chunksize)
 
-        Raises
-        ------
-        AssertionError
-            If 'paths_list' attribute is missing.
-        """
+	# Put a copy of the total file back into the shared directory
+	shutil.copy2(outfile, directory)
 
-        def preprocess_fn(ds: xr.Dataset) -> xr.Dataset:
-            """
-            Minimal preprocess function to add a 'file' dimension.
+	return(r)
 
-            Parameters
-            ----------
-            ds : xr.Dataset
-                Input dataset.
 
-            Returns
-            -------
-            xr.Dataset
-                Dataset with added 'file' dimension and transposed dimensions.
-            """
-            ds = ds.expand_dims("file")
-            ds["file"] = ["abc"]
-            ds = ds.expand_dims(["start_year", "end_year", "year_step"])
-            ds["start_year"] = [ds["years"].min().item()]
-            ds["end_year"] = [ds["years"].max().item()]
-            step = ds["years"].diff("years")
-            # Make sure year steps are uniform across time dim
-            assert len(np.unique(step.data)) == 1, (
-                "Year steps are not uniform across time dimension."
-            )
-            ds["year_step"] = [np.unique(step.data)[0]]
+def TotalSampleInWorkflow(wfcfg, directory, targyears, workflow, scale, chunksize=50, experiment_name=None):
+		# Define the output file
+		outdir = os.path.dirname(__file__)
+		outfilename = "total.workflow." + workflow + "." + scale + ".nc"
+		if len(experiment_name)>0:
+			outfilename = experiment_name + "." + outfilename
+		outfile = os.path.join(outdir, outfilename)
 
-            # dims_ls = ['years','locations','file','samples']
-            # ds = ds.transpose(*dims_ls)
-            return ds
+		# Get the list of input files
+		infiles = []
+		r=[]
+		for this_file in wfcfg[workflow][scale]:
+			infiles.append(os.path.join(directory,this_file))
 
-        assert hasattr(self, "paths_list"), (
-            "WorkflowTotaler object must have 'paths_list' attribute."
-        )
+		if len(infiles)>0:
+			rout=TotalSamples(infiles, outfile, targyears, chunksize)
+			r.append(rout)
 
-        combined_ds = xr.open_mfdataset(
-            self.paths_list,
-            concat_dim="file",
-            combine="nested",
-            join="outer",  # may want to change to join='exact'
-            preprocess=preprocess_fn,
-            chunks="auto",
-        )
-        # Check dimensions of each dataset
-        if len(np.unique(combined_ds["start_year"])) > 1:
-            start_message = click.wrap_text(
-                f"Start years are not the same across all datasets. Check default values of --pyear-start in these modules. Received: {np.unique(combined_ds['start_year'].values)}",
-                width=70,
-            )
-            click.echo(start_message)
-        if len(np.unique(combined_ds["end_year"])) > 1:
-            end_message = click.wrap_text(
-                f"End years are not the same across all datasets. Check default values of --pyear-end in these modules. Received: {np.unique(combined_ds['end_year'].values)}",
-                width=70,
-            )
-            click.echo(end_message)
-        if len(np.unique(combined_ds["year_step"])) > 1:
-            step_message = click.wrap_text(
-                f"Year steps are not the same across all datasets. Check default values of --pyear-step in these modules. Received: {np.unique(combined_ds['year_step'].values)}",
-                width=70,
-            )
-            click.echo(step_message)
+			# Put a copy of the total file back into the shared directory
+			shutil.copy2(outfile, directory)
+		return(r)
 
-        setattr(self, "projections_ds", combined_ds)
-        return combined_ds
 
-    def total_projections(self) -> xr.Dataset:
-        """
-        Totals projections along the 'file' dimension added in get_projections().
+def TotalSamplesInWorkflows(directory, pyear_start, pyear_end, pyear_step, chunksize, wfcfg_file="workflows.yml", workflow=[""], scale=[""], experiment_name=None):
 
-        Returns
-        -------
-        xr.Dataset
-            Dataset with an added 'totaled_sea_level_change' variable.
+	# Define the years of interest
+	targyears0 = xr.DataArray(np.arange(pyear_start, pyear_end+1, pyear_step), dims="years")
 
-        Raises
-        ------
-        AssertionError
-            If projections dataset has not been read in.
-        """
-        # Make sure projections have been read in
-        assert hasattr(self, "projections_ds"), (
-            "No projections dataset found. Please run get_projections first."
-        )
-        ds = getattr(self, "projections_ds")
+	# read yaml file
+	with open(wfcfg_file, 'r') as fp:
+		wfcfg = yaml.safe_load(fp)
 
-        ds["totaled_sea_level_change"] = ds["sea_level_change"].sum(dim="file")
-        setattr(self, "totaled_ds", ds["totaled_sea_level_change"])
-        return ds
+	# loop through workflows and scopes
+	r=[]
+	for this_workflow in wfcfg:
 
-    def write_totaled_projections(self, outpath: str):
-        """
-        Writes the totaled projections to a NetCDF file.
+		targyears = targyears0
 
-        Parameters
-        ----------
-        outpath : str
-            Path to write the NetCDF file to.
+		if 'options' in wfcfg[this_workflow].keys():
+			if 'pyear_end' in wfcfg[this_workflow]['options'].keys():
+				targyears = xr.DataArray(np.arange(pyear_start, min([pyear_end,wfcfg[this_workflow]['options']['pyear_end']])+1, pyear_step), dims="years")
 
-        Raises
-        ------
-        AssertionError
-            If totaled dataset has not been created.
-        """
-        assert hasattr(self, "totaled_ds"), (
-            "No totaled dataset found. Please run get_projections first."
-        )
-        totaled_ds = getattr(self, "totaled_ds")
-        totaled_ds.to_netcdf(outpath)
+		for this_scale in wfcfg[this_workflow]:
+			if this_scale in {'options'}:
+				continue
+			
+			if len(workflow[0])>0:
+				if this_workflow in workflow:
+					if len(scale[0])>0:
+						if this_scale in scale:
+							r.append(TotalSampleInWorkflow(wfcfg, directory, targyears, this_workflow, this_scale, chunksize, experiment_name=experiment_name))
+						else:
+							r.append(TotalSampleInWorkflow(wfcfg, directory, targyears, this_workflow, this_scale, chunksize, experiment_name=experiment_name))
+					else:
+						r.append(TotalSampleInWorkflow(wfcfg, directory, targyears, this_workflow, this_scale, chunksize, experiment_name=experiment_name))
+			else:
+				r.append(TotalSampleInWorkflow(wfcfg, directory, targyears, this_workflow, this_scale, chunksize, experiment_name=experiment_name))
+
+	return(r)
+
+def TotalSamples(infiles, outfile, targyears, chunksize):
+	# Skip this file if it appears to be a total file already
+	# SBM: FWIW, this might not work as intended because path is appended to file names in funcs above.
+	target_infiles = [fl for fl in infiles if not re.search(r"^total", fl)]
+
+    # Reads in multiple files (delayed) and tries combine along
+    # common dimensions and a new "file" dimension.
+	ds = xr.open_mfdataset(
+		target_infiles, 
+	    combine="nested", 
+	    concat_dim="file", 
+	    chunks={"locations":chunksize},
+	)
+	ds = ds.sel(years=targyears)
+	# Sums everything across the new "file" dimension.
+	total_out = ds[["sea_level_change"]].sum(dim="file")
+	# Add "lat" and "lon" as data variable in output, pulling values from the first file.
+	total_out["lat"] = ds["lat"].isel(file=0)
+	total_out["lon"] = ds["lon"].isel(file=0)
+
+	# Attributes for the total file
+	total_out.attrs = {
+		"description": "Total sea-level change for workflow",
+		"history": "Created " + time.ctime(time.time()),
+		"source": "FACTS: Post-processed total among available contributors: {}".format(",".join(infiles)),
+	}
+
+	# Define the missing value for the netCDF files
+	nc_missing_value = np.nan #np.iinfo(np.int16).min
+	total_out["sea_level_change"].attrs = {
+		"units": "mm", 
+		"missing_value": nc_missing_value
+	}
+
+	# Write the total to an output file.
+    # This actually carries out the delayed calculations and operations.
+    # SBM: FYI Double check the numbers to ensure everything is summing across dims correctly.
+    # SBM: FYI Also, check to see if output as something huge like float64.
+	total_out.to_netcdf(outfile, encoding={"sea_level_change": {"dtype": "f4", "zlib": True, "complevel":4, "_FillValue": nc_missing_value}})
+
+	return(outfile)
+
+
+if __name__ == "__main__":
+
+	# Initialize the command-line argument parser
+	parser = argparse.ArgumentParser(description="Total up the contributors for a particular workflow.",\
+	epilog="Note: This is meant to be run as part of the Framework for the Assessment of Changes To Sea-level (FACTS)")
+
+	# Define the command line arguments to be expected
+	parser.add_argument('--directory', help="Directory containing files to aggregate", required=True)
+	parser.add_argument('--workflows', help="Use a workflows.yml file listing files to aggregate", type=str, default=None)
+	parser.add_argument('--workflow', help="Workflow to run", type=str, default="")
+	parser.add_argument('--scale', help="Scale to run", type=str, default="")
+	parser.add_argument('--experiment_name', help="Experiment Name", type=str, default="")
+	parser.add_argument('--pyear_start', help="Year for which projections start [default=2020]", default=2020, type=int)
+	parser.add_argument('--pyear_end', help="Year for which projections end [default=2100]", default=2100, type=int)
+	parser.add_argument('--pyear_step', help="Step size in years between pyear_start and pyear_end at which projections are produced [default=10]", default=10, type=int)
+	parser.add_argument('--chunksize', help="Number of locations per chunk", default=50, type=int)
+
+	# Parse the arguments
+	args = parser.parse_args()
+
+	if args.workflows or (len(args.workflow)>0) or (len(args.scale)>0):
+		# Total up by workflow
+		TotalSamplesInWorkflows(args.directory,  args.pyear_start, args.pyear_end, args.pyear_step, args.chunksize, wfcfg_file= args.workflows, workflow=[args.workflow], scale=[args.scale], experiment_name = args.experiment_name)
+	else:
+		# Total up the workflow in the provided directory
+		TotalSamplesInDirectory(args.directory, args.pyear_start, args.pyear_end, args.pyear_step, args.chunksize)
+
+	exit()
