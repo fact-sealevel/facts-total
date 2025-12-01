@@ -13,12 +13,7 @@ Using output from an 'experiment' run using docker compose that multiple modules
 
 Clone repo (`new_pkg` branch):
 ```shell
-git clone --single-branch --branch new_pkg git@github.com:fact-sealevel/facts-total.git
-```
-
-From the project root, create a Docker container:
-```shell
-docker build -t facts-total .
+git clone git@github.com:fact-sealevel/facts-total.git
 ```
 
 Run facts-total in a container. Mount the directory containing the input data as a volume, and the directory where you'd like to write the output file. Then, use the file names in the actual arguments:
@@ -26,7 +21,7 @@ Run facts-total in a container. Mount the directory containing the input data as
 docker run --rm \
 -v /path/to/input/data:/mnt/total_in \
 -v /path/to/output/data:/mnt/total_out \
-facts-total \
+ghcr.io/fact-sealevel/facts-total:latest \
 --item /mnt/total_in/module_output_1.nc \
 --item /mnt/total_in/module_output_2.nc \
 --item /mnt/total_in/module_output_3.nc \
