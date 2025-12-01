@@ -1,0 +1,29 @@
+[project]
+name = "facts-total"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Emma Marshall", email = "emarshall@rhg.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.3.0",
+    "dask>=2025.11.0",
+    "matplotlib>=3.10.7",
+    "netcdf4>=1.7.3",
+    "pathlib>=1.0.1",
+    "xarray>=2025.10.1",
+]
+
+[project.scripts]
+facts-total = "facts_total.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.5",
+]
