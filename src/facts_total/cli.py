@@ -17,12 +17,30 @@ from facts_total.total_workflow import WorkflowTotaler
     help="Paths to component-level projection netcdf files to be totaled.",
 )
 @click.option(
+    "--pyear-start",
+    type=int,
+    required=True,
+    help="Enter the pyear-start value used for the individual modules. If modules used different pyear-start values, enter the one you would like used for the totaled output.",
+)
+@click.option(
+    "--pyear-end",
+    type=int,
+    required=True,
+    help="Enter the pyear-end value used for the individual modules. If modules used different pyear-end values, enter the one you would like used for the totaled output.",
+)
+@click.option(
+    "--pyear-step",
+    type=int,
+    required=True,
+    help="Enter the pyear-step value used for the individual modules. If modules used different pyear-step values, enter the one you would like used for the totaled output.",
+)
+@click.option(
     "--output-path",
     type=str,
     required=True,
     help="Path to write totaled projections netcdf file.",
 )
-def main(name, item, output_path):
+def main(name, item, output_path, pyear_start, pyear_end, pyear_step):
     click.echo("Hello from FACTS totaling!")
 
     # Make list of input paths
@@ -32,6 +50,9 @@ def main(name, item, output_path):
     totaler = WorkflowTotaler(
         name=name,
         paths_list=paths_list,
+        pyear_start=pyear_start,
+        pyear_end=pyear_end,
+        pyear_step=pyear_step,
     )
 
     # Read files and total projections
