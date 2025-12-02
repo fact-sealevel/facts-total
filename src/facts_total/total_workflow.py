@@ -76,7 +76,7 @@ class WorkflowTotaler:
             step = ds["years"].diff("years")
             # Make sure year steps are uniform across time dim
             assert len(np.unique(step.data)) == 1, (
-                "Year steps are not uniform across time dimension."
+                f"Year steps are not uniform across time dimension. The step values are: {np.unique(step.data)}"
             )
             ds["year_step"] = [np.unique(step.data)[0]]
 
