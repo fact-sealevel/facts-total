@@ -170,7 +170,10 @@ class WorkflowTotaler:
         ds = getattr(self, "projections_ds")
 
         ds["totaled_sea_level_change"] = ds["sea_level_change"].sum(dim="file")
-        setattr(self, "totaled_ds", ds["totaled_sea_level_change"])
+
+        ds_keep = ds[["totaled_sea_level_change", "lon", "lat"]]
+
+        setattr(self, "totaled_ds", ds_keep)
         return ds
 
     def write_totaled_projections(self, outpath: str):
