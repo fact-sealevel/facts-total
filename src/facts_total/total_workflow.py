@@ -171,7 +171,7 @@ class WorkflowTotaler:
 
         ds["totaled_sea_level_change"] = ds["sea_level_change"].sum(dim="file")
 
-        ds_keep = ds[['totaled_sea_level_change','lon','lat']]
+        ds_keep = ds[["totaled_sea_level_change", "lon", "lat"]]
 
         setattr(self, "totaled_ds", ds_keep)
         return ds
