@@ -1,6 +1,7 @@
 from typing import List
 import xarray as xr
 import numpy as np
+from pathlib import Path
 import click
 
 
@@ -37,6 +38,12 @@ class WorkflowTotaler:
             Name of the workflow.
         paths_list : list of str
             List of file paths to component-level projection datasets.
+        pyear_start : int
+            Start year for projections.
+        pyear_end : int
+            End year for projections.
+        pyear_step : int
+            Year step for projections.
         """
         self.name = name
         self.paths_list = paths_list
@@ -62,7 +69,8 @@ class WorkflowTotaler:
 
         def preprocess_fn(ds: xr.Dataset) -> xr.Dataset:
             """
-            Minimal preprocess function to add a 'file' dimension.
+            Preprocess function to add a 'file' dimension. This function is applied to each dataset as its read in. It checks that the min/max/step of the years dimension matches the provided pyear values, and adds a 'file' dimension with source info.
+            It also adds the filename of the source file as the entry for the file dimension.
 
             Parameters
             ----------
@@ -99,19 +107,23 @@ class WorkflowTotaler:
                 click.echo(message)
 
             ds = ds.expand_dims("file")
-            ds["file"] = ["abc"]
-            ds = ds.expand_dims(["start_year", "end_year", "year_step"])
-            ds["start_year"] = [ds["years"].min().item()]
-            ds["end_year"] = [ds["years"].max().item()]
+
+            # add source info along file dim
+            file = ds.encoding["source"]
+            parent_dir = Path(file).parent.stem
+            fname = Path(file).with_suffix("").name
+            source = str(Path(parent_dir) / Path(fname))
+            ds["file"] = [source]
+
+            # Check that year steps are uniform over time dim
+            ds = ds.expand_dims(["year_step"])
             step = ds["years"].diff("years")
-            # Make sure year steps are uniform across time dim
+
             assert len(np.unique(step.data)) == 1, (
                 f"Year steps are not uniform across time dimension. The step values are: {np.unique(step.data)}"
             )
             ds["year_step"] = [np.unique(step.data)[0]]
 
-            # dims_ls = ['years','locations','file','samples']
-            # ds = ds.transpose(*dims_ls)
             return ds
 
         assert hasattr(self, "paths_list"), (
@@ -126,27 +138,46 @@ class WorkflowTotaler:
             preprocess=preprocess_fn,
             chunks="auto",
         )
+
         # Check dimensions of each dataset
-        if len(np.unique(combined_ds["start_year"])) > 1:
-            start_message = click.wrap_text(
-                f"⚠️ ⚠️ Start years are not the same across all datasets. Check default values of --pyear-start in these modules. Received: {np.unique(combined_ds['start_year'].values)}. ⚠️ ⚠️",
-                width=70,
-            )
-            click.echo(start_message)
-        if len(np.unique(combined_ds["end_year"])) > 1:
-            end_message = click.wrap_text(
-                f"⚠️ ⚠️ End years are not the same across all datasets. Check default values of --pyear-end in these modules. Received: {np.unique(combined_ds['end_year'].values)}. ⚠️ ⚠️",
-                width=70,
-            )
-            click.echo(end_message)
         if len(np.unique(combined_ds["year_step"])) > 1:
             step_message = click.wrap_text(
                 f"⚠️ ⚠️ Year steps are not the same across all datasets. Check default values of --pyear-step in these modules. Received: {np.unique(combined_ds['year_step'].values)}. ⚠️ ⚠️",
                 width=70,
             )
             click.echo(step_message)
+        # Drop year_step dim after check
+        combined_ds = combined_ds.squeeze().drop_vars("year_step")
 
+        # Format lat/lon variables (want them to exist along locations dim only, not files)
+        # first downcast
+        coords_ls = ["lat", "lon"]
+        for coord in coords_ls:
+            combined_ds[coord] = combined_ds[coord].astype("float32").load()
+        # Ensure that lat/lon do not vary along file dim before dropping
+        for loc in combined_ds["locations"].values:
+            for coord in coords_ls:
+                assert (
+                    len(np.unique(combined_ds[coord].sel(locations=loc).values)) == 1
+                ), f"{coord} variable varies along 'file' dimension for location {loc}."
+        # detach lat/lon from file dim
+        lat_keep = combined_ds.lat.isel(file=0)
+        lon_keep = combined_ds.lon.isel(file=0)
+        combined_ds = combined_ds.assign_coords(
+            lat=("locations", lat_keep.values), lon=("locations", lon_keep.values)
+        )
+        combined_ds = combined_ds.reset_coords(["lat", "lon"])
+
+        # Format filename data to track cubes included in total
+        # this is a hacky (temp) replacement for how its handled in facts1 using
+        # os.listdir() for nc files in the experiment output dir
+        source_cubes = combined_ds["file"].values.tolist()
+        i = 1
+        for cube in source_cubes:
+            combined_ds.attrs.update({f"cube {i}": cube})
+            i += 1
         setattr(self, "projections_ds", combined_ds)
+
         return combined_ds
 
     def total_projections(self) -> xr.Dataset:
@@ -168,12 +199,23 @@ class WorkflowTotaler:
             "No projections dataset found. Please run get_projections first."
         )
         ds = getattr(self, "projections_ds")
+        ds_attrs = ds.attrs.copy()
 
-        ds["totaled_sea_level_change"] = ds["sea_level_change"].sum(dim="file")
+        total_ds = ds["sea_level_change"].sum(dim="file")
+        total_ds = total_ds.to_dataset(name="sea_level_change")
+        total_ds["lat"] = ("locations", ds["lat"].data)
+        total_ds["lon"] = ("locations", ds["lon"].data)
+        total_ds = total_ds.transpose("samples", "years", "locations")
 
-        ds_keep = ds[["totaled_sea_level_change", "lon", "lat"]]
+        total_ds.attrs = ds_attrs
 
-        setattr(self, "totaled_ds", ds_keep)
+        # Define the missing value for the netCDF files
+        nc_missing_value = np.nan  # np.iinfo(np.int16).min
+        total_ds["sea_level_change"].attrs = {
+            "units": "mm",
+            "missing_value": nc_missing_value,
+        }
+        setattr(self, "totaled_ds", total_ds)
         return ds
 
     def write_totaled_projections(self, outpath: str):
@@ -191,7 +233,18 @@ class WorkflowTotaler:
             If totaled dataset has not been created.
         """
         assert hasattr(self, "totaled_ds"), (
-            "No totaled dataset found. Please run get_projections first."
+            " No totaled dataset found. Please run get_projections first."
         )
         totaled_ds = getattr(self, "totaled_ds")
-        totaled_ds.to_netcdf(outpath)
+
+        # make sure attrs can be written
+        encoding = {"sea_level_change": {"zlib": True, "complevel": 4, "dtype": "f4"}}
+
+        attrs_clean = {}
+        for key, value in totaled_ds.attrs.items():
+            if isinstance(value, np.generic):
+                attrs_clean[key] = value.item()
+            else:
+                attrs_clean[key] = value
+        totaled_ds.attrs = attrs_clean
+        totaled_ds.to_netcdf(outpath, encoding=encoding)
