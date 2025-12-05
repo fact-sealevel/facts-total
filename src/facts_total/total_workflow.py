@@ -3,11 +3,12 @@ import xarray as xr
 import numpy as np
 from pathlib import Path
 import click
-import time
 import logging
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
 class WorkflowTotaler:
     """
     Handles totaling of sealevel projections from modules included in a workflow.
@@ -105,9 +106,9 @@ class WorkflowTotaler:
             ds = ds.expand_dims("file")
 
             # add source info along file dim
-            file = ds.encoding['source']
+            file = ds.encoding["source"]
             parent_dir = Path(file).parent.stem
-            fname = Path(file).with_suffix('').name
+            fname = Path(file).with_suffix("").name
             source = str(Path(parent_dir) / Path(fname))
             ds["file"] = [source]
 
@@ -149,31 +150,28 @@ class WorkflowTotaler:
         # first downcast
         coords_ls = ["lat", "lon"]
         for coord in coords_ls:
-            combined_ds[coord] = combined_ds[coord].astype(
-                'float32'
-            ).load()
+            combined_ds[coord] = combined_ds[coord].astype("float32").load()
         # Ensure that lat/lon do not vary along file dim before dropping
-        for loc in combined_ds['locations'].values:
+        for loc in combined_ds["locations"].values:
             for coord in coords_ls:
-                assert len(np.unique(combined_ds[coord].sel(locations=loc).values)) == 1, (
-                    f"{coord} variable varies along 'file' dimension for location {loc}."
-                )
-        # detach lat/lon from file dim 
-        lat_keep = combined_ds.lat.isel(file=0) 
+                assert (
+                    len(np.unique(combined_ds[coord].sel(locations=loc).values)) == 1
+                ), f"{coord} variable varies along 'file' dimension for location {loc}."
+        # detach lat/lon from file dim
+        lat_keep = combined_ds.lat.isel(file=0)
         lon_keep = combined_ds.lon.isel(file=0)
         combined_ds = combined_ds.assign_coords(
-            lat = ('locations', lat_keep.values),
-            lon = ('locations', lon_keep.values)
+            lat=("locations", lat_keep.values), lon=("locations", lon_keep.values)
         )
-        combined_ds = combined_ds.reset_coords(['lat','lon'])
+        combined_ds = combined_ds.reset_coords(["lat", "lon"])
 
-        #Format filename data to track cubes included in total
-        # this is a hacky (temp) replacement for how its handled in facts1 using 
+        # Format filename data to track cubes included in total
+        # this is a hacky (temp) replacement for how its handled in facts1 using
         # os.listdir() for nc files in the experiment output dir
         source_cubes = combined_ds["file"].values.tolist()
         i = 1
         for cube in source_cubes:
-            combined_ds.attrs.update({f'cube {i}': cube})
+            combined_ds.attrs.update({f"cube {i}": cube})
             i += 1
         setattr(self, "projections_ds", combined_ds)
 
@@ -202,20 +200,19 @@ class WorkflowTotaler:
 
         total_ds = ds["sea_level_change"].sum(dim="file")
         total_ds = total_ds.to_dataset(name="sea_level_change")
-        total_ds['lat'] = ('locations', ds['lat'].data)
-        total_ds['lon'] = ('locations', ds['lon'].data)
-        total_ds = total_ds.transpose("samples","years","locations")
+        total_ds["lat"] = ("locations", ds["lat"].data)
+        total_ds["lon"] = ("locations", ds["lon"].data)
+        total_ds = total_ds.transpose("samples", "years", "locations")
 
-        total_ds.attrs = ds_attrs 
-        
+        total_ds.attrs = ds_attrs
 
         # Define the missing value for the netCDF files
-        nc_missing_value = np.nan #np.iinfo(np.int16).min
+        nc_missing_value = np.nan  # np.iinfo(np.int16).min
         total_ds["sea_level_change"].attrs = {
-            "units": "mm", 
-            "missing_value": nc_missing_value
+            "units": "mm",
+            "missing_value": nc_missing_value,
         }
-        logging.info("totaled cube attrs: %s",  total_ds.attrs)
+        logging.info("totaled cube attrs: %s", total_ds.attrs)
         setattr(self, "totaled_ds", total_ds)
         return ds
 
@@ -238,12 +235,9 @@ class WorkflowTotaler:
         )
         totaled_ds = getattr(self, "totaled_ds")
 
-        #make sure attrs can be written
-        encoding = {'sea_level_change': {'zlib': True, 
-                                         'complevel': 4,
-                                         'dtype': 'f4'}}
+        # make sure attrs can be written
+        encoding = {"sea_level_change": {"zlib": True, "complevel": 4, "dtype": "f4"}}
 
-        
         attrs_clean = {}
         for key, value in totaled_ds.attrs.items():
             if isinstance(value, np.generic):
@@ -252,5 +246,4 @@ class WorkflowTotaler:
                 attrs_clean[key] = value
         totaled_ds.attrs = attrs_clean
         logging.info("writing totaled cube attrs: %s", totaled_ds.attrs)
-        totaled_ds.to_netcdf(outpath,
-                             encoding = encoding)
+        totaled_ds.to_netcdf(outpath, encoding=encoding)
