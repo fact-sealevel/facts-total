@@ -1,7 +1,7 @@
 [project]
 name = "facts-total"
 version = "0.1.0"
-description = "Add your description here"
+description = "A module of the FACTS framework that totals projections of sea level change from multiple sea level component modules representing different physical processes contributing to sea level change."
 readme = "README.md"
 authors = [
     { name = "Emma Marshall", email = "emarshall@rhg.com" }
