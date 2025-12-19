@@ -203,7 +203,6 @@ class WorkflowTotaler:
             combined_ds.attrs.update({f"cube {i}": cube})
             i += 1
         setattr(self, "projections_ds", combined_ds)
-
         return combined_ds
 
     def total_projections(self) -> xr.Dataset:
@@ -225,18 +224,18 @@ class WorkflowTotaler:
             "No projections dataset found. Please run get_projections first."
         )
         ds = getattr(self, "projections_ds")
-        # ds_attrs = ds.attrs.copy()
+        ds_attrs = ds.attrs.copy()
 
         ds = ds.sum(dim="file")
 
         # Define the missing value for the netCDF files
-        # nc_missing_value = np.nan  # np.iinfo(np.int16).min
-        # total_ds["sea_level_change"].attrs = {
-        #    "units": "mm",
-        #    "missing_value": nc_missing_value,
-        # }
+        nc_missing_value = np.nan  # np.iinfo(np.int16).min
+        ds["sea_level_change"].attrs = {
+            "units": "mm",
+            "missing_value": nc_missing_value,
+        }
         setattr(self, "totaled_ds", ds)
-
+        ds.attrs = ds_attrs
         return ds
 
     def write_totaled_projections(self, outpath: str):
@@ -261,12 +260,5 @@ class WorkflowTotaler:
         # make sure attrs can be written
         encoding = {"sea_level_change": {"zlib": True, "complevel": 4, "dtype": "f4"}}
 
-        attrs_clean = {}
-        for key, value in totaled_ds.attrs.items():
-            if isinstance(value, np.generic):
-                attrs_clean[key] = value.item()
-            else:
-                attrs_clean[key] = value
-        totaled_ds.attrs = attrs_clean
         totaled_ds.to_netcdf(outpath, encoding=encoding)
         logger.info("Totaled projections written to %s", outpath)
