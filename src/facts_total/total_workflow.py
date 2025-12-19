@@ -260,6 +260,5 @@ class WorkflowTotaler:
         # make sure attrs can be written
         encoding = {"sea_level_change": {"zlib": True, "complevel": 4, "dtype": "f4"}}
 
-        
         totaled_ds.to_netcdf(outpath, encoding=encoding)
         logger.info("Totaled projections written to %s", outpath)
