@@ -1,6 +1,6 @@
 [project]
 name = "facts-total"
-version = "0.1.0"
+version = "0.1.1"
 description = "A module of the FACTS framework that totals projections of sea level change from multiple sea level component modules representing different physical processes contributing to sea level change."
 readme = "README.md"
 authors = [
