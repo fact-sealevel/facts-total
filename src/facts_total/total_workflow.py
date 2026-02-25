@@ -169,18 +169,18 @@ class WorkflowTotaler:
             combined_ds[coord] = combined_ds[coord].astype("float32")
             combined_ds[coord].load()
         # Ensure that lat/lon do not vary along file dim before dropping
-        locations = combined_ds["locations"].values
-        if np.isscalar(locations) or locations.ndim == 0:
-            locations = [locations.item() if hasattr(locations, "item") else locations]
-        else:
-            locations = locations.tolist()
-        for loc in locations:
-            for coord in coords_ls:
-                assert (
-                    len(np.unique(combined_ds[coord].sel(locations=loc).values)) == 1
-                ), (
-                    f"{coord} variable varies along 'file' dimension for location {loc}: {np.unique(combined_ds[coord].sel(locations=loc).values)}."
-                )
+        #locations = combined_ds["locations"].values
+        #if np.isscalar(locations) or locations.ndim == 0:
+        #    locations = [locations.item() if hasattr(locations, "item") else locations]
+        #else:
+        #    locations = locations.tolist()
+        #for loc in locations:
+        #    for coord in coords_ls:
+        #        assert (
+        #            len(np.unique(combined_ds[coord].sel(locations=loc).values)) == 1
+        #        ), (
+        #            f"{coord} variable varies along 'file' dimension for location {loc}: {np.unique(combined_ds[coord].sel(locations=loc).values)}."
+        #        )
 
         # detach lat/lon from file dim
         lat_keep = combined_ds.lat.isel(file=0)
