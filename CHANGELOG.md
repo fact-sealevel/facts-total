@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Change
+- Temporary fix: removed lines in `format_projections()` that check that lat/lons of cubes to be combined are equal. ([PR 16](https://github.com/fact-sealevel/facts-total/pull/16), [@e-marshall](https://github.com/e-marshall))
 
 
 ## [0.1.2] - 2025-12-19
