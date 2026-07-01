@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Changed
-- Added multi-arch container build in CI
+- Added multi-arch container build in CI ([PR #18](https://github.com/fact-sealevel/facts-total/pull/18), [@e-marshall](https://github.com/e-marshall))
 
 
 ## [0.1.3] - 2026-02-25
