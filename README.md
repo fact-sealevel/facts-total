@@ -10,17 +10,12 @@ values of --pyear-start in these modules. Received: [YYYY YYYY]. ⚠️⚠️
 
 ## Example usage 
 
-Clone repo:
-```shell
-git clone git@github.com:fact-sealevel/facts-total.git
-```
-
 Run `facts-total` in a container. Mount the directory containing the input data as a volume, and the directory where you'd like to write the output file. Then, use the file names in the actual arguments. Pass the desired `pyear-start`, `pyear-end`, and `pyear-step`:
 ```shell
 docker run --rm \
 -v /path/to/input/data:/mnt/total_in \
 -v /path/to/output/data:/mnt/total_out \
-ghcr.io/fact-sealevel/facts-total:v0.1.0 \
+ghcr.io/fact-sealevel/facts-total:0.1.4 \
 --item /mnt/total_in/module_output_1.nc \
 --item /mnt/total_in/module_output_2.nc \
 --item /mnt/total_in/module_output_3.nc \
