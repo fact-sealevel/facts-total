@@ -8,6 +8,15 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
+def normalize_slc_dim_order(ds: xr.Dataset) -> xr.Dataset:
+    canonical_dim_order = tuple(
+        ds[c].dims[0] for c in ("samples", "years", "locations") if c in ds
+    )
+    if set(canonical_dim_order) == set(ds["sea_level_change"].dims):
+        ds["sea_level_change"] = ds["sea_level_change"].transpose(*canonical_dim_order)
+    return ds
+
+
 class WorkflowTotaler:
     """
     Handles totaling of sealevel projections from modules included in a workflow.
@@ -132,6 +141,8 @@ class WorkflowTotaler:
             )
             ds["year_step"] = [np.unique(step.data)[0]]
 
+            # reorder dims
+            ds = normalize_slc_dim_order(ds)
             return ds
 
         assert hasattr(self, "paths_list"), (
