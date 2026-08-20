@@ -5,7 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-
+### Fixed
+- Added a function to re-order dimensions to a fixed, canonical order before totaling ([PR #19](https://github.com/fact-sealevel/facts-total/pull/19),[@e-marshall](https://github.com/e-marshall))
 
 ## [0.1.4] - 2026-07-01
 
