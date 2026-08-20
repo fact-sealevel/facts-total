@@ -17,6 +17,7 @@ def make_dataset(dim_order):
         },
     )
 
+
 def test_normalize_dim_order_nonstandard():
     ds = make_dataset(("years", "samples", "locations"))
     result = normalize_slc_dim_order(ds)
