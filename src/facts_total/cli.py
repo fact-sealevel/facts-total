@@ -1,5 +1,7 @@
 import click
-from facts_total.total_workflow import WorkflowTotaler
+from facts_total.service import (
+    run_facts_total,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,28 +47,13 @@ logging.basicConfig(level=logging.INFO)
     help="Path to write totaled projections netcdf file.",
 )
 def main(name, item, output_path, pyear_start, pyear_end, pyear_step):
-    click.echo("Hello from FACTS totaling!")
+    click.echo("Hello from FACTS totaling (testing)!")
 
-    # Make list of input paths
-    paths_list = list(item)
-
-    # Create totaler obj
-    totaler = WorkflowTotaler(
+    run_facts_total(
         name=name,
-        paths_list=paths_list,
+        item=item,
+        output_path=output_path,
         pyear_start=pyear_start,
         pyear_end=pyear_end,
         pyear_step=pyear_step,
     )
-    totaler.print_files()
-    # Read files and total projections
-    totaler.get_projections()
-
-    # Format projections
-    totaler.format_projections()
-
-    # Calc sum
-    totaler.total_projections()
-
-    # Write totaled projections to file
-    totaler.write_totaled_projections(outpath=output_path)
