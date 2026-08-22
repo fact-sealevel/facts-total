@@ -8,6 +8,10 @@ from facts_total.io import (
 )
 
 
+def item_tuple_to_list(items: tuple) -> list:
+    return list(items)
+
+
 def run_facts_total(
     name,
     item,
@@ -17,7 +21,7 @@ def run_facts_total(
     pyear_step,
 ) -> None:
     # Make list of input paths
-    paths_list = list(item)
+    paths_list = item_tuple_to_list(items=item)
 
     # Get ds of combined projections
     projections_ds = get_projections(
