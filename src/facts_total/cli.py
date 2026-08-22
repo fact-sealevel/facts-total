@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
     type=str,
     default="my_workflow_name",
     show_default=True,
+    required=True,
     help="Name of the workflow being totaled.",
 )
 @click.option(
